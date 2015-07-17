@@ -1,0 +1,552 @@
+<html>
+<title>KDB+ Protocol and Encoding</title>
+<style>
+table { border: 1px solid green; }
+td, th { border: 1px solid green; padding: 3px; text-align: left;}
+</style>
+<body>
+
+This is my current best description of the KDB+ object encoding
+and protocol used between processes. The only blank spot, I think
+is the lack of descrpition for the compression and decompression.
+
+<h3>Atom and Vector Type Codes and Sizes</h3>
+These are the codes for atoms and lists. Atoms have a negative number, while
+homogenous vectors have a position of the same number. For example, a symbol
+atom will have type -11, and a list of symbols will have type 11. The only
+exception to this is the general list of type 0. It can contain anything from
+heterogenous atoms (a list of doubles and uuids) non-atomic types (other
+lists, vectors, lambda, or dictionaries).
+<p/>
+
+<table>
+  <tr>
+    <th>Code</th>
+    <th>Type</th>
+    <th>Size (bytes)</th>
+    <th>Encoding Description</th>
+    <th>Null value (hex)</th>
+  </tr>
+  <tr><td>0</td><td>General List</td><td>*</td><td>heterogenous, elements speicify their type</td><td>See Type 101</td></tr>
+  <tr><td>1</td><td>Boolean</td><td>1</td><td>0 = false<br/>1 = true</td><td>0x00</td></tr>
+  <tr><td>2</td><td>Guid</td><td>16</td><td>endian??</td><td>all balls</td></tr>
+  <tr><td>4</td><td>Byte</td><td>1</td><td>unsigned</td><td>0x00</td></tr>
+  <tr><td>5</td><td>Short</td><td>2</td><td>signed</td><td>0x0080</td></tr>
+  <tr><td>6</td><td>Int</td><td>4</td><td>signed</td><td>0x00000080</td></tr>
+  <tr><td>7</td><td>Long</td><td>8</td><td>signed</td><td>0x0000000000000080</td></tr>
+  <tr><td>8</td><td>Real</td><td>4</td><td>C-equav to float</td><td>0x0000c0ff</td></tr>
+  <tr><td>9</td><td>Float</td><td>8</td><td>C-equiv to double</td><td>0x000000000000f8ff</td></tr>
+  <tr><td>10</td><td>Char</td><td>1</td><td></td><td>0x20 (" ")</td></tr>
+  <tr><td>11</td><td>Symbol</td><td>*</td><td>null terminated ascii string</td><td>0x00 (empty string)</td></tr>
+  <tr><td>12</td><td>Timestamp</td><td>8</td><td>long, nanoseconds from 1/1/2000</td><td>see Long</td></tr>
+  <tr><td>13</td><td>Month</td><td>4</td><td>int, months since 1/1/2000</td><td>See Int</td></tr>
+  <tr><td>14</td><td>Date</td><td>4</td><td>int, days since 1/1/2000</td><td>See Int</td></tr>
+  <tr><td>15</td><td>Datetime</td><td>8</td><td>float, fractional days since 1/1/2000</td><td>See Float</td></tr>
+  <tr><td>16</td><td>Timespan</td><td>8</td><td>long, nanoseconds since midnight</td><td>See Long</td></tr>
+  <tr><td>17</td><td>Minute</td><td>4</td><td>int, minutes since midnight</td><td>See Int</td></tr>
+  <tr><td>18</td><td>Second</td><td>4</td><td>int, seconds since midnight</td><td>See Int</td></tr>
+  <tr><td>19</td><td>Time</td><td>4</td><td>int, milliseconds since midnight</td><td>See Int</td></tr>
+</table>
+
+<h3>Non-Atomic Type Codes</h3>
+There are everything else including functions, composite types, nulls,
+and errors. These don't have sizes themselves as they are just codes
+applied to other objects. For example, the Lambda is just a code added to a
+character vector. Notice Dictionary and Keyed Table (a flip) have the
+same codes (99 and 127), but the types they are built from is different. Unary
+Prmitive also has the same code as null.
+<p/>
+
+<table>
+  <tr>
+    <th>Code</th>
+    <th>Type</th>
+    <th>Underlying, encoded as</th>
+  </tr>
+  <tr><td>98</td><td>Table</td><td>Dictionary</td></tr>
+  <tr><td>99</td><td>Dictionary</td><td>Two equal length lists</td></tr>
+  <tr><td>99</td><td>Keyed Table</td><td>Table</td></tr>
+  <tr><td>100</td><td>Lambda</td><td>Char Vector</td></tr>
+  <tr><td>101</td><td>Unary Primitive Function</td><td>Byte</td></tr>
+  <tr><td>102</td><td>Binary Primitive Function</td><td>Byte</td></tr>
+  <tr><td>103</td><td>Ternary Primitive Function</td><td>Byte</td></tr>
+  <tr><td>104</td><td>Function Projection</td><td></td></tr>
+  <tr><td>105</td><td>Function Composition</td><td></td></tr>
+  <tr><td>106</td><td>Each Adverb</td><td></td></tr>
+  <tr><td>107</td><td>Over Adverb</td><td></td></tr>
+  <tr><td>108</td><td>Scan Adverb</td><td></td></tr>
+  <tr><td>109</td><td>Each-Pair Adverb</td><td></td></tr>
+  <tr><td>110</td><td>Each-Right Adverb</td><td></td></tr>
+  <tr><td>111</td><td>Each-Left Adverb</td><td></td></tr>
+  <tr><td>127</td><td>Sorted Dictionary</td><td>first list (keys) sorted</td></tr>
+  <tr><td>127</td><td>Sorted Keyed Table</td><td>Table</td></tr>
+  <!--<tr><td></td><td></td><td></td><td></td></tr>-->
+</table>
+
+<h3>Unary Primive Codes</h3>
+<!--1@,/{"<tr><td>",($x 0),"</td><td>",($x 1),"</td></tr>\n"}'{+((!x);{-9!`byte$1 0 0 0 10 0 0 0 101,x}'!x)}44 -->
+<table>
+  <tr>
+    <th>Code</th>
+    <th>Function</th>
+  </tr>
+  <tr><td>0</td><td>::</td></tr>
+  <tr><td>1</td><td>+:</td></tr>
+  <tr><td>2</td><td>-:</td></tr>
+  <tr><td>3</td><td>*:</td></tr>
+  <tr><td>4</td><td>%:</td></tr>
+  <tr><td>5</td><td>&amp;:</td></tr>
+  <tr><td>6</td><td>|:</td></tr>
+  <tr><td>7</td><td>^:</td></tr>
+  <tr><td>8</td><td>=:</td></tr>
+  <tr><td>9</td><td>&lt;:</td></tr>
+  <tr><td>10</td><td>&gt;:</td></tr>
+  <tr><td>11</td><td>$:</td></tr>
+  <tr><td>12</td><td>,:</td></tr>
+  <tr><td>13</td><td>#:</td></tr>
+  <tr><td>14</td><td>_:</td></tr>
+  <tr><td>15</td><td>~:</td></tr>
+  <tr><td>16</td><td>!:</td></tr>
+  <tr><td>17</td><td>?:</td></tr>
+  <tr><td>18</td><td>@:</td></tr>
+  <tr><td>19</td><td>.:</td></tr>
+  <tr><td>20</td><td>0::</td></tr>
+  <tr><td>21</td><td>1::</td></tr>
+  <tr><td>22</td><td>2::</td></tr>
+  <tr><td>23</td><td>avg</td></tr>
+  <tr><td>24</td><td>last</td></tr>
+  <tr><td>25</td><td>sum</td></tr>
+  <tr><td>26</td><td>prd</td></tr>
+  <tr><td>27</td><td>min</td></tr>
+  <tr><td>28</td><td>max</td></tr>
+  <tr><td>29</td><td>exit</td></tr>
+  <tr><td>30</td><td>getenv</td></tr>
+  <tr><td>31</td><td>abs</td></tr>
+  <tr><td>32</td><td>sqrt</td></tr>
+  <tr><td>33</td><td>log</td></tr>
+  <tr><td>34</td><td>exp</td></tr>
+  <tr><td>35</td><td>sin</td></tr>
+  <tr><td>36</td><td>asin</td></tr>
+  <tr><td>37</td><td>cos</td></tr>
+  <tr><td>38</td><td>acos</td></tr>
+  <tr><td>39</td><td>tan</td></tr>
+  <tr><td>40</td><td>atan</td></tr>
+  <tr><td>41</td><td>enlist</td></tr>
+  <tr><td>42</td><td>var</td></tr>
+  <tr><td>43</td><td>dev</td></tr>
+</table>
+
+<h3>Binary Primive Codes</h3>
+<!-- 1@,/{"<tr><td>",($x 0),"</td><td>",($x 1),"</td></tr>\n"}'{+((!x);{-9!`byte$1 0 0 0 10 0 0 0 102,x}'!x)}37 -->
+<table>
+  <tr>
+    <th>Code</th>
+    <th>Function</th>
+  </tr>
+  <tr><td>0</td><td>:</td></tr>
+  <tr><td>1</td><td>+</td></tr>
+  <tr><td>2</td><td>-</td></tr>
+  <tr><td>3</td><td>*</td></tr>
+  <tr><td>4</td><td>%</td></tr>
+  <tr><td>5</td><td>&</td></tr>
+  <tr><td>6</td><td>|</td></tr>
+  <tr><td>7</td><td>^</td></tr>
+  <tr><td>8</td><td>=</td></tr>
+  <tr><td>9</td><td><</td></tr>
+  <tr><td>10</td><td>></td></tr>
+  <tr><td>11</td><td>$</td></tr>
+  <tr><td>12</td><td>,</td></tr>
+  <tr><td>13</td><td>#</td></tr>
+  <tr><td>14</td><td>_</td></tr>
+  <tr><td>15</td><td>~</td></tr>
+  <tr><td>16</td><td>!</td></tr>
+  <tr><td>17</td><td>?</td></tr>
+  <tr><td>18</td><td>@</td></tr>
+  <tr><td>19</td><td>.</td></tr>
+  <tr><td>20</td><td>0:</td></tr>
+  <tr><td>21</td><td>1:</td></tr>
+  <tr><td>22</td><td>2:</td></tr>
+  <tr><td>23</td><td>in</td></tr>
+  <tr><td>24</td><td>within</td></tr>
+  <tr><td>25</td><td>like</td></tr>
+  <tr><td>26</td><td>bin</td></tr>
+  <tr><td>27</td><td>ss</td></tr>
+  <tr><td>28</td><td>insert</td></tr>
+  <tr><td>29</td><td>wsum</td></tr>
+  <tr><td>30</td><td>wavg</td></tr>
+  <tr><td>31</td><td>div</td></tr>
+  <tr><td>32</td><td>xexp</td></tr>
+  <tr><td>33</td><td>setenv</td></tr>
+  <tr><td>34</td><td>binr</td></tr>
+  <tr><td>35</td><td>cov</td></tr>
+  <tr><td>36</td><td>cor</td></tr>
+</table>
+
+<h3>Ternary Primive Codes</h3>
+<!-- 1@,/{"<tr><td>",($x 0),"</td><td>",($x 1),"</td></tr>\n"}'{+((!x);{-9!`byte$1 0 0 0 10 0 0 0 103,x}'!x)}6 -->
+<table>
+  <tr>
+    <th>Code</th>
+    <th>Function</th>
+  </tr>
+  <tr><td>0</td><td>'</td></tr>
+  <tr><td>1</td><td>/</td></tr>
+  <tr><td>2</td><td>\</td></tr>
+  <tr><td>3</td><td>':</td></tr>
+  <tr><td>4</td><td>/:</td></tr>
+  <tr><td>5</td><td>\:</td></tr>
+</table>
+
+<h3>Attributes</h3>
+<table>
+  <tr>
+    <th>Code</th>
+    <th>Description</th>
+  </tr>
+  <tr><td>1</td><td>sorted, ascending order</td></tr>
+  <tr><td>2</td><td>unique, a unique hash exists</td></tr>
+  <tr><td>3</td><td>parted, all equal values are next to each other</td></tr>
+  <tr><td>4</td><td>grouped, a non-unique hash exists</td></tr>
+</table>
+
+
+<h3>Handshake Request</h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>N</td><td>username:password</td><td>ascii[N]</td><td>username and password pair</td>
+  </tr>
+  <tr>
+    <td>N</td><td>1</td><td>null terminator</td><td>int</td><td>zero byte</td>
+  </tr>
+  <tr>
+    <td>N+1</td><td>1</td><td>version capabilities</td><td>int</td>
+    <td>0 - v2.5, no compression, no timestamp, no timespan, no uuid<br/>
+        1..2 - v2.6-2.8, compression, timestamp, timespan<br/>
+        3 - v3.0, compression, timestamp, timespan, uuid
+    </td>
+  </tr>
+</table>
+
+<h3>Handshake Reponse</h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>common version</td><td>int</td><td>see handshake</td>
+  </tr>
+</table>
+
+<h3>Message Header</h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>endian</td><td>int</td><td>0 = big<br/>1 = little</td>
+  </tr>
+  <tr>
+    <td>1</td><td>1</td><td>message type</td><td>int</td><td>0 = async<br/>1 = sync<br/>2 = response</td>
+  </tr>
+  <tr>
+    <td>2</td><td>1</td><td>compression</td><td>int</td><td>0 = none<br/>1 = compression</td>
+  </tr>
+  <tr>
+    <td>3</td><td>1</td><td>unused</td><td></td><td></td>
+  </tr>
+  <tr>
+    <td>4</td><td>4</td><td>message length</td><td>int</td><td>includes this header</td>
+  </tr>
+</table>
+
+<h3>Atomic Values</h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>int</td><td>will be negative (see chart at top)</td>
+  </tr>
+  <tr>
+    <td>1</td><td>N</td><td>value</td><td>*</td><td></td>
+  </tr>
+</table>
+
+<h3>Homogenous Vectors</h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>int</td><td>&gt;0, see table</td>
+  </tr>
+  <tr>
+    <td>1</td><td>1</td><td>attributes</td><td>byte</td><td>see table</td>
+  </tr>
+  <tr>
+    <td>2</td><td>4</td><td>size = N</td><td>int</td><td>number of elements</td>
+  </tr>
+  <tr>
+    <td>6</td><td>N*size</td><td>values</td><td>atom[N]</td><td>array of N atom values</td>
+  </tr>
+</table>
+
+<h3>General List</h3>
+Since the elements of the list are heterogenous and their sizes
+can differ, it is not possible to directly index into the values
+array. It must be scanned up to the item you wish to find.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>int</td><td>=0, see table</td>
+  </tr>
+  <tr>
+    <td>1</td><td>1</td><td>attributes</td><td>byte</td><td>see table</td>
+  </tr>
+  <tr>
+    <td>2</td><td>4</td><td>size</td><td>int</td><td>number of elements</td>
+  </tr>
+  <tr>
+    <td>6</td><td>varies</td><td>values</td><td>varies</td><td>N catenated values</td>
+  </tr>
+</table>
+
+<h3>Dictionary</h3>
+A sorted dictionary will have its key list sorted will the attribute set.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>int</td><td>dict = 99<br/>sorted dict = 127</td>
+  </tr>
+  <tr>
+    <td>1</td><td>x</td><td>list of length N</td><td>varies</td><td>keys</td>
+  </tr>
+  <tr>
+    <td>x+1</td><td>y</td><td>list of length N</td><td>varies</td><td>values</td>
+  </tr>
+</table>
+
+<h3>Table (Flip)</h3>
+A table is the flip of a dictionry who's values are all equi-length vectors.
+When the table is a sorted table (attribut = 2), the key vector must also
+be sorted and given the parted attribute.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>byte</td><td>=98</td>
+  </tr>
+  <tr>
+    <td>1</td><td>2</td><td>attribute</td><td>byte</td><td>see table</td>
+  </tr>
+  <tr>
+    <td>2</td><td>x</td><td>dictionary</td><td></td><td>val lists must be of same length</td>
+  </tr>
+</table>
+
+<h3>Keyed Table</h3>
+A keyed table is a dictionary mapping from table to table. A sorted
+keyed table has a sorted key table.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>byte</td><td>unsorted = 99<br/>sorted = 127</td>
+  </tr>
+  <tr>
+    <td>1</td><td>x</td><td>keys</td><td>table</td><td>sorted if type 127</td>
+  </tr>
+  <tr>
+    <td>x+1</td><td>y</td><td>values</td><td>table</td><td></td>
+  </tr>
+</table>
+
+<h3>Function / Lambda</h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+  <td>0</td><td>1</td><td>data type</td><td>byte</td><td></td>
+  </tr>
+  <tr>
+    <td>1</td><td>x</td><td>directory defined in</td><td>symbol</td><td>lambda has empty symbol</td>
+  </tr>
+  <tr>
+    <td>x+1</td><td>y</td><td>function text</td><td>char vector</td><td></td>
+  </tr>
+</table>
+
+<h3>Projection</h3>
+The projection represents a function with some of its arguments supplied, a curried
+function. Arguments not supplied are represented as nulls (type 101). For example,
+a function with 3 arguments will have object list of 4 elements.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>byte</td><td>=104</td>
+  </tr>
+  <tr>
+    <td>1</td><td>4</td><td>number of objects to follow</td><td>int</td><td>function then arguments</td>
+  </tr>
+  <tr>
+    <td>5</td><td>x</td><td>the curried function</td><td>function</td><td></td>
+  </tr>
+  <tr>
+    <td>5+x</td><td>y</td><td>first parameter</td><td>any</td><td>unsupplied arguments are nulls of type 101</td>
+  </tr>
+  <tr>
+    <td>...</td><td>...</td><td>...</td><td>...</td><td>remaining parameters if applicable</td>
+  </tr>
+</table>
+
+<h3>Function Composition</h3>
+Describes a chain of functions, each taking as input the output of the
+following function. It is represented a just a series of functions.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>byte</td><td>=105</td>
+  </tr>
+  <tr>
+    <td>1</td><td>4</td><td>length of train</td><td>int</td><td></td>
+  </tr>
+  <tr>
+    <td>5</td><td>x</td><td>left/outer most function</td><td>function</td><td></td>
+  </tr>
+  <tr>
+    <td>x+5</td><td>y</td><td>inner function</td><td>function</td><td></td>
+  </tr>
+  <tr>
+    <td>...</td><td>...</td><td>...</td><td>function</td><td>as needed</td>
+  </tr>
+</table>
+
+<h3>Null and Primitive Verb</h3>
+Null is a unary primitive with code -1. The rest are described in the charts above.
+<p/>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>byte</td><td>101 = null and unary<br/>102 = binary<br/>103 = ternary</td>
+  </tr>
+  <tr>
+    <td>1</td><td>1</td><td>primitive code</td><td>byte</td><td>see charts</td>
+  </tr>
+</table>
+
+<h3>Adverbs</h3>
+This is an adverb applied to a function.
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>adverb type</td><td>byte</td><td>see above chart</td>
+  </tr>
+  <tr>
+    <td>1</td><td>varies</td><td>function applied to</td><td>function</td><td></td>
+  </tr>
+</table>
+
+<!--
+<h3></h3>
+<table>
+  <tr>
+    <th>Offset</th>
+    <th>Length</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Notes</th>
+  </tr>
+  <tr>
+    <td>0</td><td>1</td><td>data type</td><td>byte</td><td></td>
+  </tr>
+  <tr>
+    <td></td><td></td><td></td><td></td><td></td>
+  </tr>
+  <tr>
+    <td></td><td></td><td></td><td></td><td></td>
+  </tr>
+</table>
+-->
+
+</body>
+</html>
