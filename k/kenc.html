@@ -211,6 +211,7 @@ Prmitive also has the same code as null.
 
 
 <h3>Handshake Request</h3>
+Yes, this is different from the official documenation. Yes, this is correct: the null terminator goes at the end of the packet, not the end of the string.
 <table>
   <tr>
     <th>Offset</th>
@@ -223,14 +224,14 @@ Prmitive also has the same code as null.
     <td>0</td><td>N</td><td>username:password</td><td>ascii[N]</td><td>username and password pair</td>
   </tr>
   <tr>
-    <td>N</td><td>1</td><td>null terminator</td><td>int</td><td>zero byte</td>
-  </tr>
-  <tr>
-    <td>N+1</td><td>1</td><td>version capabilities</td><td>int</td>
+    <td>N</td><td>1</td><td>version capabilities</td><td>int</td>
     <td>0 - v2.5, no compression, no timestamp, no timespan, no uuid<br/>
         1..2 - v2.6-2.8, compression, timestamp, timespan<br/>
         3 - v3.0, compression, timestamp, timespan, uuid
     </td>
+  </tr>
+  <tr>
+    <td>N+1</td><td>1</td><td>null terminator</td><td>int</td><td>zero byte</td>
   </tr>
 </table>
 
@@ -420,7 +421,7 @@ keyed table has a sorted key table.
     <th>Notes</th>
   </tr>
   <tr>
-  <td>0</td><td>1</td><td>data type</td><td>byte</td><td></td>
+  <td>0</td><td>1</td><td>data type</td><td>byte</td><td>= 100</td>
   </tr>
   <tr>
     <td>1</td><td>x</td><td>directory defined in</td><td>symbol</td><td>lambda has empty symbol</td>
